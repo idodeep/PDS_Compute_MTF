@@ -71,8 +71,8 @@ class PDS_Compute_MTF(object):
 
     def __init__(self, filename, roi):
         image_data = cv2.imread(filename, 0)
-        roi = roi.astype(int)
-        image_data = image_data[roi[0]:roi[1], roi[2]:roi[3]]
+#        roi = roi.astype(int)
+#        image_data = image_data[roi[0]:roi[1], roi[2]:roi[3]]
         self.data = image_data
         _, th = cv2.threshold(self.data, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         self.min = np.amin(self.data)
@@ -237,6 +237,9 @@ class PDS_Compute_MTF(object):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('filepath', help='String Filepath')
+    #ROI_selection("..\\docs\\ScreenShots\\ROI_Selection.png")
     args = parser.parse_args()
     filename = args.filepath
-    ROI_selection(filename)
+    #ROI_selection(filename)
+    filename = "../data/Y2.bmp"
+    PDS_Compute_MTF(filename, None)
