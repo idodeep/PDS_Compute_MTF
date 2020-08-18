@@ -1,3 +1,6 @@
+# Original:
+# https://github.com/bvnayak/PDS_Compute_MTF
+
 import numpy as np
 import cv2
 import argparse
@@ -6,7 +9,7 @@ import matplotlib.patches as mpatches
 from matplotlib.widgets import RectangleSelector
 from scipy import interpolate
 from scipy.signal import savgol_filter
-
+import sys
 
 # Reference:
 # http://stackoverflow.com/questions/6518811/interpolate-nan-values-in-a-numpy-array
@@ -81,9 +84,11 @@ class PDS_Compute_MTF(object):
         area_above_thresh = self.data[above_thresh].sum()/above_thresh.sum()
         self.threshold = (area_below_thresh - area_above_thresh)/2 + area_above_thresh
 
-        edges = cv2.Canny(self.data, self.min, self.max-5)
+        # TODO: How to solve: edges are not one per row
+        edges = cv2.Canny(th, 0, 255)
+        #edges = cv2.Canny(self.data, self.min, self.max-5)
         fig = plt.figure()
-        fig.suptitle(filename + ' Analysis with ' + str(roi), fontsize=20)
+        fig.suptitle(filename + ' Analysis', fontsize=10)
         plt.subplot(2, 2, 1)
         plt.imshow(edges, cmap='gray')
         plt.title("Detected Edge")
@@ -110,18 +115,39 @@ class PDS_Compute_MTF(object):
             diff_img = smooth_img[i, 1:] - smooth_img[i, 0:(column-1)]
             abs_diff_img = np.absolute(diff_img)
             abs_diff_max = np.amax(abs_diff_img)
+            # TODO: How to solve?
             if abs_diff_max == 1:
-                raise IOError('No Edge Found')
-            app_edge = np.where(abs_diff_img == abs_diff_max)
-            bound_edge_left = app_edge[0][0] - 2
-            bound_edge_right = app_edge[0][0] + 3
+                print ('skipped row, no edge found', i)
+                continue
+                #raise IOError('No Edge Found')
+            app_edge = np.where(abs_diff_img == abs_diff_max)[0][0]
+            # TODO: How to solve: edge is at the image border
+            clamped_edge = max(6, min(app_edge, len(self.data[i])-1-7))
+            if app_edge != clamped_edge:
+                print('moved edge', app_edge, clamped_edge)
+                #continue
+                app_edge = clamped_edge
+            bound_edge_left = app_edge - 2
+            bound_edge_right = app_edge + 3
             strip_cropped = self.data[i, bound_edge_left:bound_edge_right]
             temp_y = np.arange(1, 6)
-            f = interpolate.interp1d(strip_cropped, temp_y, kind='cubic')
-            edge_pos_temp = f(self.threshold)
+            try:
+                # TODO: How to solve: repetitions
+                if len(strip_cropped) != len(set(strip_cropped)):
+                    print('hacking', i, strip_cropped)
+                    dir = 1 if strip_cropped[0] <= strip_cropped[-1] else -1
+                    for s in range(len(strip_cropped) - 1):
+                        if strip_cropped[s+1] * dir <= strip_cropped[s] * dir:
+                            strip_cropped[s+1] = strip_cropped[s] + dir
+                    print('\thacked', strip_cropped)
+                f = interpolate.interp1d(strip_cropped, temp_y, kind='cubic', bounds_error=False, fill_value="extrapolate", assume_sorted=False)
+                edge_pos_temp = f(self.threshold)
+            except:
+                print(i, strip_cropped, bound_edge_left, bound_edge_right, sys.exc_info()[0])
+                continue
             edge_pos[i] = edge_pos_temp + bound_edge_left - 1
-            bound_edge_left_expand = app_edge[0][0] - 6
-            bound_edge_right_expand = app_edge[0][0] + 7
+            bound_edge_left_expand = app_edge - 6
+            bound_edge_right_expand = app_edge + 7
             array_values_near_edge[i, :] = self.data[i, bound_edge_left_expand:bound_edge_right_expand]
             array_positions[i, :] = np.arange(bound_edge_left_expand, bound_edge_right_expand)
         y = np.arange(0, row)
