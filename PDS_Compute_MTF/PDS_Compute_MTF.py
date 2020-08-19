@@ -111,20 +111,22 @@ class PDS_Compute_MTF(object):
         edge_pos = np.empty(0)
         smooth_img = smooth_img.astype(float)
         for i in range(0, row):
+            err = 0
             # print(smooth_img[i,:])
             diff_img = smooth_img[i, 1:] - smooth_img[i, 0:(column-1)]
             abs_diff_img = np.absolute(diff_img)
             abs_diff_max = np.amax(abs_diff_img)
             # TODO: How to solve?
             if abs_diff_max == 1:
-                print ('skipped row, no edge found', i)
+                print (i, 'Err: no edge found, Skipped')
                 continue
                 #raise IOError('No Edge Found')
             app_edge = np.where(abs_diff_img == abs_diff_max)[0][0]
             # TODO: How to solve: edge is at the image border
             clamped_edge = max(6, min(app_edge, len(self.data[i])-1-7))
             if app_edge != clamped_edge:
-                print('moved edge', app_edge, clamped_edge, np.where(abs_diff_img == abs_diff_max))
+                print(i, 'Err: edge at border, moved edge', app_edge, clamped_edge, np.where(abs_diff_img == abs_diff_max))
+                err += 1
                 #continue
                 app_edge = clamped_edge
             bound_edge_left = app_edge - 2
@@ -134,16 +136,17 @@ class PDS_Compute_MTF(object):
             try:
                 # TODO: How to solve: repetitions
                 if len(strip_cropped) != len(set(strip_cropped)):
-                    print('hacking', i, strip_cropped)
+                    print(i, 'Err: repetitions, hacking', strip_cropped)
                     dir = 1 if strip_cropped[0] <= strip_cropped[-1] else -1
                     for s in range(len(strip_cropped) - 1):
                         if strip_cropped[s+1] * dir <= strip_cropped[s] * dir:
                             strip_cropped[s+1] = strip_cropped[s] + dir
                     print('\thacked', strip_cropped)
+                    err += 1
                 f = interpolate.interp1d(strip_cropped, temp_y, kind='cubic', bounds_error=False, fill_value="extrapolate", assume_sorted=False)
                 edge_pos_temp = f(self.threshold)
             except:
-                print(i, strip_cropped, bound_edge_left, bound_edge_right, sys.exc_info()[0])
+                print(i, 'Err:', sys.exc_info()[0], ', Skipped.\n\t' ,strip_cropped, bound_edge_left, bound_edge_right)
                 continue
             edge_pos = np.append(edge_pos, edge_pos_temp + bound_edge_left - 1)
             bound_edge_left_expand = app_edge - 6
@@ -154,6 +157,8 @@ class PDS_Compute_MTF(object):
             else:
                 array_values_near_edge = np.vstack([array_values_near_edge, self.data[i, bound_edge_left_expand:bound_edge_right_expand]])
                 array_positions = np.vstack([array_positions, np.arange(bound_edge_left_expand, bound_edge_right_expand)])
+            if not err:
+                print('-', i)
         y = np.arange(0, row)
         nans, x = nan_helper(edge_pos)
         edge_pos[nans] = np.interp(x(nans), x(~nans), edge_pos[~nans])
