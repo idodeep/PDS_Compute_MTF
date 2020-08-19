@@ -106,9 +106,9 @@ class PDS_Compute_MTF(object):
         smooth_img = cv2.filter2D(self.data, -1, kernel)
         row = self.data.shape[0]
         column = self.data.shape[1]
-        array_values_near_edge = np.empty([row, 13])
-        array_positions = np.empty([row, 13])
-        edge_pos = np.empty(row)
+        array_values_near_edge = []
+        array_positions = []
+        edge_pos = np.empty(0)
         smooth_img = smooth_img.astype(float)
         for i in range(0, row):
             # print(smooth_img[i,:])
@@ -124,7 +124,7 @@ class PDS_Compute_MTF(object):
             # TODO: How to solve: edge is at the image border
             clamped_edge = max(6, min(app_edge, len(self.data[i])-1-7))
             if app_edge != clamped_edge:
-                print('moved edge', app_edge, clamped_edge)
+                print('moved edge', app_edge, clamped_edge, np.where(abs_diff_img == abs_diff_max))
                 #continue
                 app_edge = clamped_edge
             bound_edge_left = app_edge - 2
@@ -145,11 +145,15 @@ class PDS_Compute_MTF(object):
             except:
                 print(i, strip_cropped, bound_edge_left, bound_edge_right, sys.exc_info()[0])
                 continue
-            edge_pos[i] = edge_pos_temp + bound_edge_left - 1
+            edge_pos = np.append(edge_pos, edge_pos_temp + bound_edge_left - 1)
             bound_edge_left_expand = app_edge - 6
             bound_edge_right_expand = app_edge + 7
-            array_values_near_edge[i, :] = self.data[i, bound_edge_left_expand:bound_edge_right_expand]
-            array_positions[i, :] = np.arange(bound_edge_left_expand, bound_edge_right_expand)
+            if len(array_values_near_edge) == 0:
+                array_values_near_edge = self.data[i, bound_edge_left_expand:bound_edge_right_expand]
+                array_positions = np.arange(bound_edge_left_expand, bound_edge_right_expand)
+            else:
+                array_values_near_edge = np.vstack([array_values_near_edge, self.data[i, bound_edge_left_expand:bound_edge_right_expand]])
+                array_positions = np.vstack([array_positions, np.arange(bound_edge_left_expand, bound_edge_right_expand)])
         y = np.arange(0, row)
         nans, x = nan_helper(edge_pos)
         edge_pos[nans] = np.interp(x(nans), x(~nans), edge_pos[~nans])
